@@ -6,8 +6,11 @@ mod config;
 mod find;
 mod gsi;
 mod library;
+mod llm;
 mod overlay;
+mod pack;
 mod pick;
+mod radar;
 mod snapshot;
 
 use std::io::{BufRead, BufReader, Read, Write};
@@ -47,6 +50,9 @@ const HELP: &str = "nadecue: CS2 grenade lineups on demand
   nadecue find WORDS     find a lineup by name, any order (\"mirage ct smoke from t spawn\")
   nadecue save           save where you stand and aim (hold the grenade) as a lineup
   nadecue forget         delete the lineup on the card
+  nadecue import PACK.json  add a lineup pack (JSON array of lineups)
+  nadecue shoot [MAP..] [--all]  photograph lineups that have exact angles, in CS2 (needs -netconport)
+  nadecue radar          redraw every lineup's radar picture
   nadecue preview MAP    show MAP's lineups without the game (to check the card)
   nadecue list [MAP]     print saved lineups
   nadecue cfg            (re)install the Game State Integration config
@@ -59,9 +65,16 @@ fn main() -> ExitCode {
     let result = match args.first().map(String::as_str) {
         Some("run") => run(cfg),
         Some("next" | "hide" | "forget" | "reload") => ask(&args[0]).map(|r| print_reply(&r)),
-        Some("find") if args.len() > 1 => {
-            ask(&format!("find {}", args[1..].join(" "))).map(|r| print_reply(&r))
+        Some("find") if args.len() > 1 => find_cli(&cfg, &args[1..].join(" ")),
+        Some("import") if args.len() > 1 => args[1..]
+            .iter()
+            .try_for_each(|f| pack::import(std::path::Path::new(f)).map(|m| println!("{f}: {m}"))),
+        Some("shoot") => {
+            let all = args.iter().any(|a| a == "--all");
+            let maps: Vec<String> = args[1..].iter().filter(|a| !a.starts_with("--")).cloned().collect();
+            pack::shoot(&cfg, &maps, all)
         }
+        Some("radar") => radar_all(),
         Some("preview") => match args.get(1) {
             Some(map) => ask(&format!("preview {map}")).map(|r| print_reply(&r)),
             None => Err("usage: nadecue preview MAP (e.g. de_mirage)".into()),
@@ -96,7 +109,7 @@ fn print_reply(reply: &str) {
 }
 
 /// Send one command to the daemon and return its reply.
-fn ask(command: &str) -> Result<String, String> {
+pub fn ask(command: &str) -> Result<String, String> {
     let mut stream = UnixStream::connect(socket_path())
         .map_err(|e| format!("daemon not running ({e}); start it with `nadecue run`"))?;
     stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
@@ -174,6 +187,7 @@ fn save(cfg: &Config) -> Result<(), String> {
         view: String::new(),
         note,
         file: PathBuf::new(),
+        ..Default::default()
     };
     let file =
         library::save(&root, &mut lineup, pictures.as_ref().map(|(a, v)| (a.as_slice(), v.as_slice())))
@@ -181,6 +195,59 @@ fn save(cfg: &Config) -> Result<(), String> {
     let _ = ask("reload");
     notify(&format!("Saved {} {}", pretty_map(&map), kind.word().to_lowercase()), &lineup.name);
     println!("Saved {}", file.display());
+    Ok(())
+}
+
+/// `find`: word matching in the daemon, the language model (if configured) when that isn't sure.
+fn find_cli(cfg: &Config, text: &str) -> Result<(), String> {
+    let reply: serde_json::Value =
+        serde_json::from_str(&ask(&format!("match {text}"))?).map_err(|e| e.to_string())?;
+    if let Some(error) = reply["error"].as_str() {
+        notify("No lineup", error);
+        return Err(error.to_string());
+    }
+    let options: Vec<(String, String)> = reply["options"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|o| Some((o["key"].as_str()?.to_string(), o["label"].as_str()?.to_string())))
+                .collect()
+        })
+        .unwrap_or_default();
+    let best = reply["best"].as_u64().map(|b| b as usize);
+    let sure = reply["sure"].as_bool().unwrap_or(false);
+    let mut choice = best;
+    if !sure && !cfg.llm_url.is_empty() && !options.is_empty() {
+        let labels: Vec<String> = options.iter().map(|(_, l)| l.clone()).collect();
+        match llm::pick(cfg, text, &labels) {
+            Ok(pick) => choice = pick.or(best),
+            Err(error) => eprintln!("language model: {error} (using word matching)"),
+        }
+    }
+    let Some(i) = choice.filter(|i| *i < options.len()) else {
+        let map = reply["map"].as_str().map(pretty_map).unwrap_or_default();
+        notify("No lineup found", &format!("{map} · \"{text}\""));
+        return Err(format!("No {map} lineup matches \"{text}\""));
+    };
+    print_reply(&ask(&format!("pin {}", options[i].0))?);
+    Ok(())
+}
+
+fn radar_all() -> Result<(), String> {
+    let root = library::root();
+    let dir = radar::dir();
+    let mut n = 0;
+    for entry in std::fs::read_dir(&root).map_err(|e| e.to_string())?.flatten() {
+        let map = entry.file_name().to_string_lossy().into_owned();
+        for mut lineup in library::load(&root, &map) {
+            if pack::draw_radar(&dir, &mut lineup) {
+                lineup.store().map_err(|e| e.to_string())?;
+                n += 1;
+            }
+        }
+    }
+    println!("{n} radar pictures drawn (radar files in {})", dir.display());
+    let _ = ask("reload");
     Ok(())
 }
 
@@ -385,7 +452,8 @@ impl Daemon {
                 format!("{} lineups", self.lineups.len())
             }
             "state" => serde_json::to_string(&self.snap).unwrap_or_default(),
-            "find" if !arg.is_empty() => self.find(arg),
+            "match" if !arg.is_empty() => self.matches(arg),
+            "pin" if !arg.is_empty() => self.pin(arg),
             "forget" => match self.shown.and_then(|i| self.lineups.get(i)).cloned() {
                 Some(lineup) => match library::forget(&lineup) {
                     Ok(()) => {
@@ -443,25 +511,57 @@ impl Daemon {
         Some((order, at))
     }
 
-    /// `find WORDS`: pin the best match and show it now (and first when that grenade comes out).
-    fn find(&mut self, text: &str) -> String {
+    /// `match WORDS`: the lineups the words could mean (best first) for `find` to choose from.
+    fn matches(&mut self, text: &str) -> String {
         let q = find::parse(text);
         let map = q.map.clone().or_else(|| self.snap.map.clone()).or_else(|| self.loaded_map.clone());
         let Some(map) = map else {
-            notify("Which map?", "Say the map too, e.g. \"mirage window smoke\".");
-            return "No map: say which one".into();
+            return serde_json::json!({"error": "Say the map too, e.g. \"mirage window smoke\"."})
+                .to_string();
         };
-        if self.loaded_map.as_deref() != Some(map.as_str()) || !self.live() {
+        if self.loaded_map.as_deref() != Some(map.as_str()) {
             self.load(&map);
         }
         let ranked = find::rank(&q, &self.lineups, &self.used);
-        let Some(&(best, _)) = ranked.first() else {
-            notify("No lineup found", &format!("{} · \"{text}\"", pretty_map(&map)));
-            return format!("No {} lineup matches \"{text}\"", pretty_map(&map));
+        let sure = find::sure(&q, &ranked, &self.lineups);
+        // Everything of that kind on the map goes to the model, word-match order first.
+        let mut order: Vec<usize> = ranked.iter().map(|(i, _)| *i).collect();
+        for (i, l) in self.lineups.iter().enumerate() {
+            if q.kind.is_none_or(|k| l.kind == k) && !order.contains(&i) {
+                order.push(i);
+            }
+        }
+        let options: Vec<serde_json::Value> = order
+            .iter()
+            .map(|&i| {
+                let l = &self.lineups[i];
+                let side = if l.side.is_empty() { "any side".to_string() } else { format!("{} side", l.side) };
+                serde_json::json!({"key": l.key(), "label": format!("{} ({}, {side})", l.name, l.kind.word())})
+            })
+            .collect();
+        serde_json::json!({
+            "map": map,
+            "options": options,
+            "best": (!ranked.is_empty()).then_some(0),
+            "sure": sure,
+        })
+        .to_string()
+    }
+
+    /// `pin KEY`: show that lineup now and first when its grenade comes out, until it's thrown.
+    fn pin(&mut self, key: &str) -> String {
+        // The game may have reloaded its own map since `match`: load the lineup's map again.
+        if !self.lineups.iter().any(|l| l.key() == key)
+            && let Some((map, _)) = key.split_once('/')
+        {
+            self.load(map);
+        }
+        let Some(lineup) = self.lineups.iter().find(|l| l.key() == key) else {
+            return format!("No lineup {key}");
         };
-        let lineup = &self.lineups[best];
+        let map = lineup.map.clone();
         let reply = format!("{} ({} {})", lineup.name, pretty_map(&map), lineup.kind.word().to_lowercase());
-        self.pin = Some(lineup.key());
+        self.pin = Some(key.to_string());
         if !self.live() || self.snap.map.as_deref() != Some(map.as_str()) {
             // Planning from the menu or another map: show it as a browse card.
             self.snap = Snapshot { map: Some(map), ..Default::default() };
@@ -515,7 +615,12 @@ impl Daemon {
             name: lineup.name.clone(),
             side: lineup.side.clone(),
             img: lineup.image_path().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default(),
-            view: lineup.view_path().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default(),
+            view: if lineup.radar_path().is_some() {
+                String::new()
+            } else {
+                lineup.view_path().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default()
+            },
+            radar: lineup.radar_path().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default(),
             note: lineup.note.clone(),
             arrow,
             line,

@@ -3,9 +3,10 @@
 use serde_json::Value;
 
 /// Grenade families. Molotov and incendiary share lineups, so they are one kind.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Kind {
+    #[default]
     Smoke,
     Flash,
     He,

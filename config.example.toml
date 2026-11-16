@@ -18,3 +18,12 @@ browse_secs = 15
 
 # Throw styles offered when saving.
 throws = ["Left click", "Jump throw", "Run + jump throw", "W + jump throw", "Right click", "Left + right click", "Crouch + left click"]
+
+# CS2 console port used by `nadecue shoot` (launch CS2 with -netconport 2121).
+netcon_port = 2121
+shoot_settle_ms = 700
+
+# Optional: an OpenAI-compatible server (plain http) that helps `find` when word matching isn't sure.
+# llm_url = "http://127.0.0.1:8080"
+# llm_model = "qwen3"
+# llm_extra = {"chat_template_kwargs": {"enable_thinking": false}}

@@ -10,6 +10,7 @@
 (defvar nc_throw "")
 (defvar nc_count "")
 (defvar nc_view "")
+(defvar nc_radar "")
 (defvar nc_note "")
 (defvar nc_list "[]")
 
@@ -25,10 +26,12 @@
       (label :class "side" :visible {nc_side != ""} :text nc_side)
       (label :class "name" :hexpand true :xalign 0 :limit-width 24 :text nc_name)
       (label :class "count" :visible {nc_count != ""} :text nc_count))
-    (overlay :class "shot" :visible {nc_img != "" || nc_view != ""}
-      (image :path {nc_img != "" ? nc_img : nc_view} :image-width 380 :image-height 214)
+    (overlay :class "shot" :visible {nc_img != "" || nc_view != "" || nc_radar != ""}
+      (image :path {nc_img != "" ? nc_img : nc_view != "" ? nc_view : nc_radar} :image-width 380 :image-height 214)
       (box :class "inset" :halign "start" :valign "end" :visible {nc_img != "" && nc_view != ""}
-        (image :path nc_view :image-width 128 :image-height 72)))
+        (image :path nc_view :image-width 128 :image-height 72))
+      (box :class "inset radar" :halign "start" :valign "end" :visible {nc_radar != ""}
+        (image :path nc_radar :image-width 120 :image-height 120)))
     (label :class "note" :xalign 0 :wrap true :visible {nc_note != ""} :text nc_note)
     (box :class "guide" :space-evenly false :visible {nc_arrow != "" || nc_line != "" || nc_throw != ""}
       (label :class "arrow" :visible {nc_arrow != ""} :text nc_arrow)

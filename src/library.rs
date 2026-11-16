@@ -8,8 +8,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::snapshot::Kind;
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Lineup {
+    /// Stable id from a lineup pack (`nadecue import` updates the lineup with the same id).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub id: String,
     pub name: String,
     pub map: String,
     pub kind: Kind,
@@ -22,6 +25,12 @@ pub struct Lineup {
     /// Where to look (unit vector), when known.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fwd: Option<[f64; 3]>,
+    /// Exact view angles (pitch, yaw) for `setang`, when known: `nadecue shoot` uses them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ang: Option<[f64; 2]>,
+    /// Where it lands (x, y in game units), for the radar picture.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub to: Option<[f64; 2]>,
     /// How to throw it: "Left click", "Jump throw", ...
     #[serde(default)]
     pub throw: String,
@@ -31,6 +40,12 @@ pub struct Lineup {
     /// The whole view when saved (where you stand and look from).
     #[serde(default)]
     pub view: String,
+    /// Radar crop with where to stand and where it lands.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub radar: String,
+    /// Where the lineup came from (a site, a friend), shown nowhere, kept for credit.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source: String,
     /// Free text, e.g. "stand in the corner by the bin".
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub note: String,
@@ -50,6 +65,20 @@ impl Lineup {
 
     pub fn view_path(&self) -> Option<PathBuf> {
         self.beside(&self.view)
+    }
+
+    pub fn radar_path(&self) -> Option<PathBuf> {
+        self.beside(&self.radar)
+    }
+
+    /// The file stem (`window-from-t-spawn`), pictures are named after it.
+    pub fn stem(&self) -> String {
+        self.file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()
+    }
+
+    /// Write the JSON back after changing fields.
+    pub fn store(&self) -> std::io::Result<()> {
+        fs::write(&self.file, serde_json::to_vec_pretty(self).map_err(std::io::Error::other)?)
     }
 
     /// `<map>/<file stem>`: the key usage is remembered under.
@@ -143,7 +172,7 @@ pub fn save(root: &Path, lineup: &mut Lineup, pictures: Option<(&[u8], &[u8])>) 
 
 /// Delete a lineup and its picture.
 pub fn forget(lineup: &Lineup) -> std::io::Result<()> {
-    for picture in [lineup.image_path(), lineup.view_path()].into_iter().flatten() {
+    for picture in [lineup.image_path(), lineup.view_path(), lineup.radar_path()].into_iter().flatten() {
         let _ = fs::remove_file(picture);
     }
     fs::remove_file(&lineup.file)
@@ -228,6 +257,7 @@ mod tests {
             view: String::new(),
             note: String::new(),
             file: PathBuf::new(),
+            ..Default::default()
         };
         save(&root, &mut a, Some((b"png", b"view"))).unwrap();
         assert_eq!(a.key(), "de_mirage/window");

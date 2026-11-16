@@ -12,6 +12,10 @@ pub struct Query {
     pub kind: Option<Kind>,
     /// The words left to match against names and notes (sides stay in here: "t spawn").
     pub words: Vec<String>,
+    /// Words naming where it should land ("CT" in "CT smoke from T spawn").
+    pub land: Vec<String>,
+    /// Words naming where it's thrown from (after "from", or a lone "T/CT spawn").
+    pub origin: Vec<String>,
 }
 
 const MAPS: &[(&str, &[&str])] = &[
@@ -85,15 +89,31 @@ pub fn words(text: &str) -> Vec<String> {
 
 pub fn parse(text: &str) -> Query {
     let mut q = Query::default();
+    let mut after_from = false;
     for w in words(text) {
         if let Some((map, _)) = MAPS.iter().find(|(_, names)| names.contains(&w.as_str())) {
             q.map = Some(map.to_string());
         } else if let Some((kind, _)) = KINDS.iter().find(|(_, names)| names.contains(&w.as_str())) {
             q.kind = Some(*kind);
+        } else if w == "from" {
+            after_from = true;
+            q.words.push(w);
         } else if !FILLER.contains(&w.as_str()) {
-            // "from" stays: it tells "CT from T spawn" apart a little, at a low weight.
+            if after_from {
+                q.origin.push(w.clone());
+            } else {
+                q.land.push(w.clone());
+            }
             q.words.push(w);
         }
+    }
+    // No "from": a "T spawn" / "CT spawn" next to another place is where it's thrown from
+    // ("smoke t spawn ct" = a CT smoke from T spawn).
+    if q.origin.is_empty()
+        && let Some(i) = q.land.windows(2).position(|p| (p[0] == "t" || p[0] == "ct") && p[1] == "spawn")
+        && q.land.len() > 2
+    {
+        q.origin = q.land.drain(i..i + 2).collect();
     }
     q
 }
@@ -120,21 +140,53 @@ fn close(a: &str, b: &str) -> bool {
 
 /// How well `lineup` fits the words (higher is better). Side counts as a word of the lineup.
 pub fn score(q: &Query, lineup: &Lineup) -> f64 {
-    let mut have = words(&format!("{} {}", lineup.name, lineup.note));
+    // Names read "<lands> from <thrown from>". A request word scores most in the matching part,
+    // a little in the other part, and a note word ("stand in the corner against stairs") only a
+    // little, so a note never makes a lineup look like a sure hit.
+    let (land_part, origin_part) = lineup.name.split_once(" from ").unwrap_or((&lineup.name, ""));
+    let mut land = words(land_part);
+    let mut origin = words(origin_part);
+    let mut note = words(&lineup.note);
     let side = lineup.side.to_lowercase();
-    let mut total = 0.0;
-    for w in &q.words {
-        if let Some(pos) = have.iter().position(|h| close(w, h)) {
-            // Each lineup word answers one request word: "t ... t" needs two t's.
-            have.remove(pos);
-            total += if w == "from" { 0.25 } else { 1.0 };
-        } else if !side.is_empty() && *w == side {
-            total += 0.5;
-        } else if w != "from" {
-            total -= 0.2;
+    let take = |list: &mut Vec<String>, w: &str| -> bool {
+        match list.iter().position(|h| close(w, h)) {
+            Some(i) => {
+                list.remove(i);
+                true
+            }
+            None => false,
         }
+    };
+    let mut total = 0.0;
+    let mut landed = false;
+    for (w, wants_land) in q.land.iter().map(|w| (w, true)).chain(q.origin.iter().map(|w| (w, false))) {
+        let (home, other) = if wants_land { (&mut land, &mut origin) } else { (&mut origin, &mut land) };
+        total += if take(home, w) {
+            landed |= wants_land;
+            if wants_land { 1.5 } else { 1.0 }
+        } else if take(other, w) {
+            0.3
+        } else if (!side.is_empty() && *w == side) || take(&mut note, w) {
+            0.4
+        } else {
+            -0.2
+        };
+    }
+    if landed {
+        total += 0.5;
     }
     total
+}
+
+/// Sure enough to skip the language model: a clear winner over the best lineup with another name.
+pub fn sure(q: &Query, ranked: &[(usize, f64)], lineups: &[Lineup]) -> bool {
+    let Some(&(first, top)) = ranked.first() else { return false };
+    if q.land.is_empty() && q.origin.is_empty() {
+        return true; // just "mirage smoke": the most recent one
+    }
+    let name = lineups[first].name.to_lowercase();
+    let rival = ranked.iter().find(|(i, _)| lineups[*i].name.to_lowercase() != name).map(|(_, s)| *s);
+    top >= 1.5 && rival.is_none_or(|r| top - r >= 0.5)
 }
 
 /// Lineups matching `q`, best first (ties: thrown most recently, then name).
@@ -145,7 +197,7 @@ pub fn rank(q: &Query, lineups: &[Lineup], used: &Usage) -> Vec<(usize, f64)> {
         .filter(|(_, l)| q.kind.is_none_or(|k| l.kind == k))
         .map(|(i, l)| (i, score(q, l)))
         .collect();
-    let content = q.words.iter().any(|w| w != "from");
+    let content = !q.land.is_empty() || !q.origin.is_empty();
     if content {
         out.retain(|(_, s)| *s > 0.0);
     }
@@ -173,6 +225,7 @@ mod tests {
             view: String::new(),
             note: note.into(),
             file: PathBuf::from(format!("/x/{name}.json")),
+            ..Default::default()
         }
     }
 
@@ -190,6 +243,10 @@ mod tests {
         assert_eq!(q.map.as_deref(), Some("de_mirage"));
         assert_eq!(q.kind, Some(Kind::Smoke));
         assert_eq!(q.words, ["t", "spawn", "ct"]);
+        assert_eq!(
+            (q.land.as_slice(), q.origin.as_slice()),
+            (&["ct".to_string()][..], &["t".to_string(), "spawn".to_string()][..])
+        );
     }
 
     #[test]
@@ -211,6 +268,14 @@ mod tests {
         assert_eq!(best("ct flash", &all).as_deref(), Some("CT flash"));
         assert_eq!(best("conector smoke", &all).as_deref(), Some("Connector"));
         assert_eq!(best("smoke banana", &all), None);
+        // Landing spot beats a throw spot with the same word: a CT smoke, not one thrown from CT.
+        let real = [
+            l("Palace from CT Spawn", Kind::Smoke, "CT", ""),
+            l("CT from Palace Alley", Kind::Smoke, "", ""),
+        ];
+        assert_eq!(best("mirage ct smoke from t spawn", &real).as_deref(), Some("CT from Palace Alley"));
+        let q = parse("mirage ct smoke from t spawn");
+        assert!(sure(&q, &rank(&q, &real, &Usage::default()), &real));
         // Just a grenade (and map): everything of that kind, most recent first.
         assert_eq!(rank(&parse("mirage flash"), &all, &Usage::default()).len(), 1);
     }

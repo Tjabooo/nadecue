@@ -131,6 +131,7 @@ mod tests {
             view: String::new(),
             note: String::new(),
             file: PathBuf::from(format!("/x/{name}.json")),
+            ..Default::default()
         }
     }
 

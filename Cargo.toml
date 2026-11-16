@@ -1,6 +1,6 @@
 [package]
 name = "nadecue"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.88"
 description = "CS2 grenade lineups that appear when you pull out the grenade and vanish when you throw it"

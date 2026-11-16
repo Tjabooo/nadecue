@@ -18,6 +18,16 @@ pub struct Config {
     pub eww_dir: PathBuf,
     /// Throw styles offered when saving.
     pub throws: Vec<String>,
+    /// CS2's console port (`-netconport`), used by `nadecue shoot`.
+    pub netcon_port: u16,
+    /// Wait after each teleport before the screenshot (`shoot`).
+    pub shoot_settle_ms: u64,
+    /// OpenAI-compatible endpoint (http://host:port) that helps `find` when word matching isn't sure.
+    pub llm_url: String,
+    pub llm_model: String,
+    /// Extra JSON fields merged into the request, e.g. `{"chat_template_kwargs": {"enable_thinking": false}}`.
+    pub llm_extra: Option<serde_json::Value>,
+    pub llm_timeout_secs: u64,
 }
 
 pub fn config_dir() -> PathBuf {
@@ -48,6 +58,12 @@ impl Default for Config {
             ]
             .map(String::from)
             .to_vec(),
+            netcon_port: 2121,
+            shoot_settle_ms: 700,
+            llm_url: String::new(),
+            llm_model: String::new(),
+            llm_extra: None,
+            llm_timeout_secs: 15,
         }
     }
 }
@@ -85,6 +101,12 @@ impl Config {
                         _ => PathBuf::from(v),
                     };
                 }
+                "netcon_port" => c.netcon_port = value.parse().unwrap_or(c.netcon_port),
+                "shoot_settle_ms" => c.shoot_settle_ms = value.parse().unwrap_or(c.shoot_settle_ms),
+                "llm_url" => c.llm_url = unquote(value),
+                "llm_model" => c.llm_model = unquote(value),
+                "llm_extra" => c.llm_extra = serde_json::from_str(value).ok(),
+                "llm_timeout_secs" => c.llm_timeout_secs = value.parse().unwrap_or(c.llm_timeout_secs),
                 "throws" => {
                     let list = value.trim_start_matches('[').trim_end_matches(']');
                     let throws: Vec<String> =

@@ -22,15 +22,17 @@ pub struct Card {
     pub state: String,
     pub throw: String,
     pub count: String,
-    /// Whole-view picture (where you stand).
+    /// Whole-view picture (where you stand), when there's no radar picture.
     pub view: String,
+    /// Radar crop: where to stand and where it lands.
+    pub radar: String,
     pub note: String,
     /// JSON list of `{name, on}` for the strip of other lineups.
     pub list: String,
 }
 
 impl Card {
-    fn vars(&self) -> [(&'static str, &str); 12] {
+    fn vars(&self) -> [(&'static str, &str); 13] {
         [
             ("nc_kind", &self.kind),
             ("nc_name", &self.name),
@@ -42,6 +44,7 @@ impl Card {
             ("nc_throw", &self.throw),
             ("nc_count", &self.count),
             ("nc_view", &self.view),
+            ("nc_radar", &self.radar),
             ("nc_note", &self.note),
             ("nc_list", &self.list),
         ]
