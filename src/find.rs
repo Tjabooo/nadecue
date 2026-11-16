@@ -28,6 +28,7 @@ const MAPS: &[(&str, &[&str])] = &[
     ("de_vertigo", &["vertigo"]),
     ("de_overpass", &["overpass"]),
     ("de_train", &["train"]),
+    ("de_cache", &["cache", "cash"]),
     ("cs_office", &["office"]),
     ("cs_italy", &["italy"]),
 ];
