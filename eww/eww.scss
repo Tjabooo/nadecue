@@ -67,6 +67,14 @@ window {
   margin-bottom: 8px;
 }
 
+.aimring {
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: 50%;
+  border: 3px solid $orange;
+  box-shadow: 0 0 0 2px rgba(18, 13, 10, 0.85), inset 0 0 0 2px rgba(18, 13, 10, 0.85);
+}
+
 .inset {
   margin: 6px;
   border: 1px solid $line;
@@ -128,7 +136,15 @@ window {
   border-left: 3px solid $gold;
 }
 
-.card.ready .inset {
+.card.ready .aimring {
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: 50%;
+  border: 3px solid $orange;
+  box-shadow: 0 0 0 2px rgba(18, 13, 10, 0.85), inset 0 0 0 2px rgba(18, 13, 10, 0.85);
+}
+
+.inset {
   margin: 6px;
   border: 1px solid $line;
   border-radius: 4px;

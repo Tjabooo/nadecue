@@ -30,6 +30,8 @@
       (image :path {nc_img != "" ? nc_img : nc_view != "" ? nc_view : nc_radar} :image-width 380 :image-height 214)
       (box :class "inset" :halign "start" :valign "end" :visible {nc_img != "" && nc_view != ""}
         (image :path nc_view :image-width 128 :image-height 72))
+      ; Where to aim: a ring around the picture's centre (the crosshair when it was taken).
+      (box :class "aimring" :halign "center" :valign "center" :visible {nc_img != ""})
       (box :class "inset radar" :halign "start" :valign "end" :visible {nc_radar != ""}
         (image :path nc_radar :image-width 120 :image-height 120)))
     (label :class "note" :xalign 0 :wrap true :visible {nc_note != ""} :text nc_note)
