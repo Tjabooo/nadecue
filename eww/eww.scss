@@ -1,0 +1,174 @@
+// nadecue card, ember palette. No animations: it sits over a game.
+$bg: rgba(18, 13, 10, 0.88);
+$panel: #1b1410;
+$line: #3a2c22;
+$fg: #d8cbbf;
+$sub: #b2a397;
+$dim: #7a675a;
+$orange: #ff8c1a;
+$gold: #f5a524;
+$ember: #ff4d1f;
+
+* {
+  all: unset;
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 13px;
+  color: $fg;
+}
+
+window {
+  background: transparent;
+}
+
+.card {
+  background: $bg;
+  border: 1px solid $line;
+  border-left: 3px solid $orange;
+  border-radius: 10px;
+  padding: 10px 12px 10px 12px;
+  min-width: 380px;
+}
+
+.head {
+  margin-bottom: 8px;
+}
+
+.kind {
+  color: $panel;
+  background: $orange;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-weight: bold;
+  font-size: 11px;
+  margin-right: 6px;
+}
+
+.side {
+  color: $sub;
+  border: 1px solid $line;
+  border-radius: 4px;
+  padding: 0 5px;
+  font-size: 11px;
+  margin-right: 8px;
+}
+
+.name {
+  font-weight: bold;
+}
+
+.count {
+  color: $dim;
+  font-size: 11px;
+}
+
+.shot {
+  border: 1px solid $line;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.inset {
+  margin: 6px;
+  border: 1px solid $line;
+  border-radius: 4px;
+}
+
+.note {
+  color: $sub;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.list {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid $line;
+}
+
+.pick {
+  color: $dim;
+  font-size: 12px;
+}
+
+.pick.on {
+  color: $orange;
+  font-weight: bold;
+}
+
+.guide {
+  background: $panel;
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+.arrow {
+  font-size: 20px;
+  font-weight: bold;
+  color: $orange;
+  min-width: 26px;
+  margin-right: 6px;
+}
+
+.line {
+  color: $sub;
+}
+
+.throw {
+  color: $gold;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.card.spot .arrow,
+.card.spot .line {
+  color: $gold;
+}
+
+.card.ready {
+  border-left: 3px solid $gold;
+}
+
+.card.ready .inset {
+  margin: 6px;
+  border: 1px solid $line;
+  border-radius: 4px;
+}
+
+.note {
+  color: $sub;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.list {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid $line;
+}
+
+.pick {
+  color: $dim;
+  font-size: 12px;
+}
+
+.pick.on {
+  color: $orange;
+  font-weight: bold;
+}
+
+.guide {
+  background: rgba(245, 165, 36, 0.16);
+}
+
+.card.ready .arrow,
+.card.ready .line {
+  color: $gold;
+  font-weight: bold;
+}
+
+// No position from the game (real matches): the guide row just says how to throw.
+.card.blind .line {
+  color: $gold;
+  font-size: 11px;
+  font-weight: bold;
+}

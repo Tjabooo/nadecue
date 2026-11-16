@@ -1,0 +1,20 @@
+# Copy to ~/.config/nadecue/config.toml. Every line is optional.
+
+# Port CS2 posts its game state to (written into CS2's gamestate_integration_nadecue.cfg).
+port = 3714
+
+# Output to screenshot when saving a lineup (grim -o). Empty = every output.
+output = ""
+
+# Screen to open the card on (eww open --screen; eww names screens by monitor model).
+screen = ""
+
+# With a nade in hand, only lineups within this many metres show up. This only applies when
+# CS2 reports positions, which it does for spectators, not for players in a live match.
+radius_m = 30
+
+# The card opened with `nadecue next` (nothing in hand) closes after this many seconds.
+browse_secs = 15
+
+# Throw styles offered when saving.
+throws = ["Left click", "Jump throw", "Run + jump throw", "W + jump throw", "Right click", "Left + right click", "Crouch + left click"]

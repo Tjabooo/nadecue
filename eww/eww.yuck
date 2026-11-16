@@ -1,0 +1,40 @@
+; nadecue lineup card. nadecue fills these variables with `eww update` and opens the window
+; only while a card is up.
+(defvar nc_kind "SMOKE")
+(defvar nc_name "")
+(defvar nc_side "")
+(defvar nc_img "")
+(defvar nc_arrow "")
+(defvar nc_line "")
+(defvar nc_state "blind")
+(defvar nc_throw "")
+(defvar nc_count "")
+(defvar nc_view "")
+(defvar nc_note "")
+(defvar nc_list "[]")
+
+(defwindow nadecue
+  :monitor 0
+  :geometry (geometry :x "28px" :y "0px" :anchor "center right")
+  :stacking "overlay"
+  :focusable false
+  :exclusive false
+  (box :class "card ${nc_state}" :orientation "v" :space-evenly false
+    (box :class "head" :space-evenly false
+      (label :class "kind" :text nc_kind)
+      (label :class "side" :visible {nc_side != ""} :text nc_side)
+      (label :class "name" :hexpand true :xalign 0 :limit-width 24 :text nc_name)
+      (label :class "count" :visible {nc_count != ""} :text nc_count))
+    (overlay :class "shot" :visible {nc_img != "" || nc_view != ""}
+      (image :path {nc_img != "" ? nc_img : nc_view} :image-width 380 :image-height 214)
+      (box :class "inset" :halign "start" :valign "end" :visible {nc_img != "" && nc_view != ""}
+        (image :path nc_view :image-width 128 :image-height 72)))
+    (label :class "note" :xalign 0 :wrap true :visible {nc_note != ""} :text nc_note)
+    (box :class "guide" :space-evenly false :visible {nc_arrow != "" || nc_line != "" || nc_throw != ""}
+      (label :class "arrow" :visible {nc_arrow != ""} :text nc_arrow)
+      (label :class "line" :hexpand true :xalign 0 :text nc_line)
+      (label :class "throw" :visible {nc_throw != ""} :text nc_throw))
+    (box :class "list" :orientation "v" :space-evenly false :visible {nc_list != "[]"}
+      (for e in nc_list
+        (label :class {e.on ? "pick on" : "pick"} :xalign 0 :limit-width 40
+               :text {e.on ? "▸ ${e.name}" : "  ${e.name}"})))))

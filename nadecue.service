@@ -1,0 +1,13 @@
+[Unit]
+Description=nadecue: CS2 grenade lineups on screen while you hold the grenade
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/nadecue run
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=10
+
+[Install]
+WantedBy=graphical-session.target
