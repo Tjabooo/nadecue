@@ -41,9 +41,9 @@ const KINDS: &[(Kind, &[&str])] = &[
 
 /// Words that carry no meaning in a request.
 const FILLER: &[&str] = &[
-    "magi", "maggie", "show", "me", "the", "a", "an", "for", "on", "of", "my", "lineup", "lineups", "line",
-    "up", "please", "get", "give", "find", "pull", "open", "what's", "whats", "is", "how", "do", "i",
-    "throw", "grenade", "nadecue", "side", "to", "into",
+    "hey", "show", "me", "the", "a", "an", "for", "on", "of", "my", "lineup", "lineups", "line", "up",
+    "please", "get", "give", "find", "pull", "open", "what's", "whats", "is", "how", "do", "i", "throw",
+    "grenade", "nadecue", "side", "to", "into",
 ];
 
 /// Lowercase words, with speech-to-text spellings folded: "C.T." → ct, "tea" → t, "dust two" → dust2.
@@ -186,7 +186,7 @@ mod tests {
         assert_eq!(words("Mirage, C.T. smoke from T-spawn"), ["mirage", "ct", "smoke", "from", "t", "spawn"]);
         assert_eq!(words("see tea smoke dust two"), ["ct", "smoke", "dust2"]);
         assert_eq!(words("counter terrorist flash"), ["ct", "flash"]);
-        let q = parse("magi smoke t spawn ct mirage");
+        let q = parse("hey smoke t spawn ct mirage");
         assert_eq!(q.map.as_deref(), Some("de_mirage"));
         assert_eq!(q.kind, Some(Kind::Smoke));
         assert_eq!(q.words, ["t", "spawn", "ct"]);
