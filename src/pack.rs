@@ -31,14 +31,17 @@ pub fn draw_radar(dir: &Path, lineup: &mut Lineup) -> bool {
 }
 
 /// Add the lineups in a pack (a JSON array of lineups) to the library. A lineup whose `id` is
-/// already there gets its text and position updated and keeps its pictures.
-pub fn import(file: &Path) -> Result<String, String> {
+/// already there gets its text and position updated and keeps its pictures. `prune` deletes
+/// library lineups that have an id but aren't in the pack (a source's lineup that was dropped or
+/// replaced); lineups you saved yourself have no id and are never touched.
+pub fn import(file: &Path, prune: bool) -> Result<String, String> {
     let bytes = std::fs::read(file).map_err(|e| format!("{}: {e}", file.display()))?;
     let pack: Vec<Lineup> = serde_json::from_slice(&bytes).map_err(|e| format!("{}: {e}", file.display()))?;
     let root = library::root();
     let radar_dir = radar::dir();
     let mut by_map: BTreeMap<String, Vec<Lineup>> = BTreeMap::new();
     let (mut added, mut updated, mut radars) = (0, 0, 0);
+    let pack_ids: Vec<String> = pack.iter().map(|l| l.id.clone()).filter(|id| !id.is_empty()).collect();
     for mut new in pack {
         if new.name.is_empty() || new.map.is_empty() {
             continue;
@@ -72,7 +75,25 @@ pub fn import(file: &Path) -> Result<String, String> {
             radars += 1;
         }
     }
+    let mut removed = 0;
+    if prune {
+        let ids: std::collections::HashSet<&str> = pack_ids.iter().map(String::as_str).collect();
+        let maps: Vec<String> = std::fs::read_dir(&root)
+            .map(|d| d.flatten().filter_map(|e| e.file_name().into_string().ok()).collect())
+            .unwrap_or_default();
+        for map in maps {
+            for old in library::load(&root, &map) {
+                if !old.id.is_empty() && !ids.contains(old.id.as_str()) {
+                    library::forget(&old).map_err(|e| e.to_string())?;
+                    removed += 1;
+                }
+            }
+        }
+    }
     let mut msg = format!("{added} added, {updated} updated");
+    if prune {
+        msg += &format!(", {removed} removed");
+    }
     if radars > 0 {
         msg += &format!(", {radars} radar pictures");
     } else {

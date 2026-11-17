@@ -174,9 +174,26 @@ pub fn score(q: &Query, lineup: &Lineup) -> f64 {
         };
     }
     if landed {
-        total += 0.5;
+        total += 1.2;
     }
+    // Name words nobody asked for ("Deep" in "Deep Stairs") count a little against it.
+    total -= 0.05 * (land.len() + origin.iter().filter(|w| *w != "from").count()) as f64;
     total
+}
+
+/// True when every name word was asked for and every content word of the request is in the name.
+fn exact(q: &Query, lineup: &Lineup) -> bool {
+    let mut name: Vec<String> = words(&lineup.name).into_iter().filter(|w| w != "from").collect();
+    let asked: Vec<&String> = q.land.iter().chain(q.origin.iter()).collect();
+    for w in &asked {
+        match name.iter().position(|h| close(w, h)) {
+            Some(i) => {
+                name.remove(i);
+            }
+            None => return false,
+        }
+    }
+    name.is_empty() && !asked.is_empty()
 }
 
 /// Sure enough to skip the language model: a clear winner over the best lineup with another name.
@@ -185,9 +202,12 @@ pub fn sure(q: &Query, ranked: &[(usize, f64)], lineups: &[Lineup]) -> bool {
     if q.land.is_empty() && q.origin.is_empty() {
         return true; // just "mirage smoke": the most recent one
     }
+    if exact(q, &lineups[first]) {
+        return true;
+    }
     let name = lineups[first].name.to_lowercase();
     let rival = ranked.iter().find(|(i, _)| lineups[*i].name.to_lowercase() != name).map(|(_, s)| *s);
-    top >= 1.5 && rival.is_none_or(|r| top - r >= 0.5)
+    top >= 1.5 && rival.is_none_or(|r| top - r >= 0.4)
 }
 
 /// Lineups matching `q`, best first (ties: thrown most recently, then name).
@@ -277,6 +297,14 @@ mod tests {
         assert_eq!(best("mirage ct smoke from t spawn", &real).as_deref(), Some("CT from Palace Alley"));
         let q = parse("mirage ct smoke from t spawn");
         assert!(sure(&q, &rank(&q, &real, &Usage::default()), &real));
+        // An exact name beats a longer one with the same words.
+        let stairs = [
+            l("Deep Stairs from T Spawn", Kind::Smoke, "T", ""),
+            l("Stairs from T Spawn", Kind::Smoke, "T", ""),
+        ];
+        assert_eq!(best("mirage stairs smoke from t spawn", &stairs).as_deref(), Some("Stairs from T Spawn"));
+        let q = parse("mirage stairs smoke from t spawn");
+        assert!(sure(&q, &rank(&q, &stairs, &Usage::default()), &stairs));
         // Just a grenade (and map): everything of that kind, most recent first.
         assert_eq!(rank(&parse("mirage flash"), &all, &Usage::default()).len(), 1);
     }

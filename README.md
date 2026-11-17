@@ -71,7 +71,7 @@ Classic `hyprland.conf`: `bind = SUPER ALT, U, exec, nadecue next`.
 | `nadecue forget` | Delete the lineup on the card |
 | `nadecue preview MAP` | Show `MAP`'s lineups without the game, e.g. `nadecue preview de_mirage` |
 | `nadecue list [MAP]` | Print saved lineups |
-| `nadecue import PACK.json` | Add a lineup pack (a JSON array of lineups, format below); same `id` = update |
+| `nadecue import PACK.json [--prune]` | Add a lineup pack (a JSON array of lineups, format below); same `id` = update; `--prune` deletes lineups with an `id` that the pack no longer has (yours, without an id, stay) |
 | `nadecue shoot [MAP..] [--all]` | Photograph every lineup that has `pos` + `ang` but no picture yet, in CS2 |
 | `nadecue radar` | Redraw every radar picture |
 | `nadecue cfg` | Reinstall CS2's game state config |

@@ -50,7 +50,7 @@ const HELP: &str = "nadecue: CS2 grenade lineups on demand
   nadecue find WORDS     find a lineup by name, any order (\"mirage ct smoke from t spawn\")
   nadecue save           save where you stand and aim (hold the grenade) as a lineup
   nadecue forget         delete the lineup on the card
-  nadecue import PACK.json  add a lineup pack (JSON array of lineups)
+  nadecue import PACK.json [--prune]  add a lineup pack (--prune: drop pack lineups no longer in it)
   nadecue shoot [MAP..] [--all]  photograph lineups that have exact angles, in CS2 (needs -netconport)
   nadecue radar          redraw every lineup's radar picture
   nadecue preview MAP    show MAP's lineups without the game (to check the card)
@@ -66,9 +66,13 @@ fn main() -> ExitCode {
         Some("run") => run(cfg),
         Some("next" | "hide" | "forget" | "reload") => ask(&args[0]).map(|r| print_reply(&r)),
         Some("find") if args.len() > 1 => find_cli(&cfg, &args[1..].join(" ")),
-        Some("import") if args.len() > 1 => args[1..]
-            .iter()
-            .try_for_each(|f| pack::import(std::path::Path::new(f)).map(|m| println!("{f}: {m}"))),
+        Some("import") if args.len() > 1 => {
+            let prune = args.iter().any(|a| a == "--prune");
+            args[1..]
+                .iter()
+                .filter(|a| !a.starts_with("--"))
+                .try_for_each(|f| pack::import(std::path::Path::new(f), prune).map(|m| println!("{f}: {m}")))
+        }
         Some("shoot") => {
             let all = args.iter().any(|a| a == "--all");
             let maps: Vec<String> = args[1..].iter().filter(|a| !a.starts_with("--")).cloned().collect();
@@ -524,12 +528,13 @@ impl Daemon {
         }
         let ranked = find::rank(&q, &self.lineups, &self.used);
         let sure = find::sure(&q, &ranked, &self.lineups);
-        // Everything of that kind on the map goes to the model, word-match order first.
-        let mut order: Vec<usize> = ranked.iter().map(|(i, _)| *i).collect();
-        for (i, l) in self.lineups.iter().enumerate() {
-            if q.kind.is_none_or(|k| l.kind == k) && !order.contains(&i) {
-                order.push(i);
-            }
+        // The model chooses among the best word matches; with none, among everything of that kind
+        // on the map (the words may be a nickname only the model knows).
+        let mut order: Vec<usize> = ranked.iter().take(12).map(|(i, _)| *i).collect();
+        if order.is_empty() {
+            order = (0..self.lineups.len())
+                .filter(|&i| q.kind.is_none_or(|k| self.lineups[i].kind == k))
+                .collect();
         }
         let options: Vec<serde_json::Value> = order
             .iter()
